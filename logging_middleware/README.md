@@ -38,8 +38,4 @@ Authorization: Bearer <your_access_token>
 ## 🧪 Error Handling
 If you attempt to send an invalid payload (e.g., `stack: "frontend"` but `package: "db"`), the API will immediately reject the request with a `400 Bad Request` and a helpful error message explaining *why* the constraint failed.
 
-## 💻 How to Run
-```bash
-npm install
-npm run dev
-```
+
