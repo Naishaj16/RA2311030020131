@@ -2,12 +2,10 @@ const { solveKnapsack } = require('../services/algorithm');
 
 const AFFORDMED_API_BASE = 'http://20.207.122.201/evaluation-service';
 
-/**
- * Controller to fetch data from Affordmed API and optimize schedules.
- */
+
 const getOptimizedSchedules = async (req, res) => {
     try {
-        // 1. Extract the user's token from the incoming request
+
         const authHeader = req.headers.authorization;
         if (!authHeader) {
             return res.status(401).json({ error: "Missing Authorization header. Please pass your Bearer token." });
@@ -21,7 +19,7 @@ const getOptimizedSchedules = async (req, res) => {
             }
         };
 
-        // 2. Fetch Depots and Vehicles in parallel for speed
+
         const [depotsResponse, vehiclesResponse] = await Promise.all([
             fetch(`${AFFORDMED_API_BASE}/depots`, fetchOptions),
             fetch(`${AFFORDMED_API_BASE}/vehicles`, fetchOptions)
@@ -39,7 +37,7 @@ const getOptimizedSchedules = async (req, res) => {
         const depots = depotsData.depots || [];
         const vehicles = vehiclesData.vehicles || [];
 
-        // 3. Process each depot
+
         const results = depots.map(depot => {
             const capacity = depot.MechanicHours;
             const optimizationResult = solveKnapsack(capacity, vehicles);
@@ -52,7 +50,7 @@ const getOptimizedSchedules = async (req, res) => {
             };
         });
 
-        // 4. Return the optimized schedules
+
         return res.status(200).json({
             success: true,
             optimizedSchedules: results

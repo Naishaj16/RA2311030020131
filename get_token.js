@@ -1,6 +1,6 @@
-// ==============================================================
-// DO NOT EDIT - Your exact details from the successful Postman registration
-// ==============================================================
+
+
+
 const MY_DETAILS = {
     email: "nj7423@srmist.edu.in",
     name: "naisha jain",
@@ -12,7 +12,6 @@ const MY_DETAILS = {
 
 async function getCredentials() {
     console.log("⏳ Getting Authorization Token directly...");
-    
     try {
         const authResponse = await fetch("http://20.207.122.201/evaluation-service/auth", {
             method: "POST",
