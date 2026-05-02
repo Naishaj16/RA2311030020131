@@ -1,103 +1,230 @@
-# Scalable Notification System Design
+# Campus Notifications System Design
 
-This document outlines the architecture and data flow for our scalable notification backend. The goal is to design a system that can reliably send emails, SMS, and push notifications to users without blocking the main application thread or losing messages during high traffic spikes.
+This document details the architectural design, database schematics, optimization strategies, and reliability mechanisms for the Campus Notifications Microservice.
 
-## 🏗️ High-Level Architecture
+---
 
-I've chosen an event-driven, microservices-oriented approach. By decoupling the core business logic from the notification delivery mechanism, we ensure that the system remains responsive even if a third-party provider (like SendGrid or Twilio) experiences downtime.
+## Stage 1: API Design and Real-Time Mechanisms
 
-```mermaid
-graph TD
-    %% Define styles for components
-    classDef client fill:#3498db,stroke:#2980b9,stroke-width:2px,color:#fff;
-    classDef api fill:#2ecc71,stroke:#27ae60,stroke-width:2px,color:#fff;
-    classDef queue fill:#f39c12,stroke:#d35400,stroke-width:2px,color:#fff;
-    classDef worker fill:#9b59b6,stroke:#8e44ad,stroke-width:2px,color:#fff;
-    classDef db fill:#e74c3c,stroke:#c0392b,stroke-width:2px,color:#fff;
-    classDef external fill:#34495e,stroke:#2c3e50,stroke-width:2px,color:#fff;
+To support a seamless notification experience for students, the platform requires a robust REST API contract and a mechanism for real-time delivery.
 
-    Client["📱 Client App (Web/Mobile)"]:::client
-    API["🟢 API Gateway (Node.js/Express)"]:::api
-    NotificationSvc["⚙️ Notification Service"]:::api
-    
-    Queue["📨 Message Queue (Redis/RabbitMQ)"]:::queue
-    
-    EmailWorker["✉️ Email Worker"]:::worker
-    SMSWorker["💬 SMS Worker"]:::worker
-    PushWorker["🔔 Push Worker"]:::worker
-    
-    DB[("🗄️ Database (PostgreSQL/MongoDB)")]:::db
-    
-    SendGrid["📧 SendGrid API"]:::external
-    Twilio["📲 Twilio API"]:::external
-    FCM["☁️ Firebase Cloud Messaging"]:::external
+### Core REST API Endpoints
 
-    %% Connections
-    Client -- "Triggers Event (e.g., Signup)" --> API
-    API -- "POST /notify" --> NotificationSvc
-    NotificationSvc -- "Save Audit Log" --> DB
-    NotificationSvc -- "Publish Message" --> Queue
-    
-    Queue -- "Consume Message" --> EmailWorker
-    Queue -- "Consume Message" --> SMSWorker
-    Queue -- "Consume Message" --> PushWorker
-    
-    EmailWorker -- "Send via SMTP/API" --> SendGrid
-    SMSWorker -- "Send SMS" --> Twilio
-    PushWorker -- "Send Push" --> FCM
-    
-    EmailWorker -. "Update Status (Sent/Failed)" .-> DB
-    SMSWorker -. "Update Status" .-> DB
-    PushWorker -. "Update Status" .-> DB
+1. **Fetch Notifications**
+   - **Endpoint:** `GET /api/v1/notifications`
+   - **Description:** Retrieves a paginated list of notifications for the authenticated student.
+   - **Headers:**
+     ```json
+     {
+       "Authorization": "Bearer <JWT_TOKEN>"
+     }
+     ```
+   - **Response (200 OK):**
+     ```json
+     {
+       "data": [
+         {
+           "id": "notif_8f92a",
+           "type": "Placement",
+           "message": "Infosys has shortlisted you for the interview round.",
+           "isRead": false,
+           "createdAt": "2026-05-02T10:00:00Z"
+         }
+       ],
+       "meta": {
+         "page": 1,
+         "hasMore": true
+       }
+     }
+     ```
+
+2. **Mark Notification as Read**
+   - **Endpoint:** `PATCH /api/v1/notifications/:id/read`
+   - **Description:** Updates the `isRead` status of a specific notification to true.
+   - **Response (200 OK):**
+     ```json
+     {
+       "success": true,
+       "message": "Notification marked as read"
+     }
+     ```
+
+### Real-Time Mechanism
+
+For real-time delivery without requiring the client to aggressively poll the server, I recommend **Server-Sent Events (SSE)**.
+Unlike WebSockets, which are fully bidirectional and heavy, SSE operates over standard HTTP, making it much easier to scale, cache, and load-balance. Since notifications are strictly server-to-client (unidirectional), SSE provides the exact real-time push capabilities needed with minimal overhead.
+
+---
+
+## Stage 2: Database Selection and Schema
+
+### Database Selection: PostgreSQL
+I strongly suggest a relational database like **PostgreSQL**. Notifications require strict schema adherence (e.g., specific `notificationType` enums), predictable querying, and strict ACID guarantees to ensure messages aren't lost or duplicated. PostgreSQL also provides excellent indexing capabilities which are crucial for read-heavy operations like fetching notifications.
+
+### Database Schema
+```sql
+CREATE TABLE notifications (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    student_id VARCHAR(50) NOT NULL,
+    notification_type VARCHAR(20) NOT NULL, -- 'Event', 'Result', 'Placement'
+    message TEXT NOT NULL,
+    is_read BOOLEAN DEFAULT false,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Index to optimize querying unread notifications for a specific student
+CREATE INDEX idx_student_unread ON notifications(student_id, is_read, created_at DESC);
 ```
 
-### Component Breakdown
+### Scaling Challenges & Solutions
+As data volume increases to millions of rows, the primary database will face high read and write contention.
+**Solutions:**
+1. **Read Replicas:** Route all `GET /api/v1/notifications` queries to read-only replica databases to offload stress from the primary write database.
+2. **Data Partitioning (Archiving):** Notifications older than 30 days are rarely accessed. We can partition the `notifications` table by date, moving historical data to cold storage (e.g., AWS S3) to keep the active table small and fast.
 
-1.  **API Gateway & Notification Service:** This Node.js/Express application receives requests from client applications or other internal microservices. It validates the payload, logs the initial intent to the database, and pushes the job to a queue. It returns a `202 Accepted` response immediately.
-2.  **Message Queue:** The backbone of our asynchronous processing. Using Redis (via BullMQ) or RabbitMQ ensures that sudden bursts of notification requests are buffered and processed at a steady rate.
-3.  **Workers:** Independent Node.js processes that subscribe to specific queue channels (e.g., `email_queue`, `sms_queue`). They handle the actual network calls to external providers. If a call fails due to a network blip, the worker can automatically retry the job with exponential backoff.
-4.  **Database:** Stores user preferences (e.g., "opt-out of marketing SMS") and an audit trail of every notification attempt for analytics and debugging.
+---
 
-## 🔄 Data Flow Diagram
+## Stage 3: Query Optimization
 
-Here is a sequence diagram detailing the lifecycle of a single notification request.
+### Critique of the Existing Query
+```sql
+SELECT * FROM notifications 
+WHERE studentID = 1042 AND isRead = false 
+ORDER BY createdAt DESC;
+```
+**Why is it slow?**
+1. **`SELECT *`**: Fetching every column is inefficient and wastes network bandwidth. We should only select the necessary fields (e.g., `id`, `message`, `type`, `createdAt`).
+2. **Missing Composite Index**: Without an index covering `(studentID, isRead, createdAt)`, the database is forced to perform a sequential scan across 5,000,000 rows to find matches and then sort them in memory.
 
-```mermaid
-sequenceDiagram
-    participant User
-    participant App as Core Application
-    participant API as Notification API
-    participant Queue as Message Queue
-    participant Worker as Notification Worker
-    participant Provider as 3rd Party (e.g., Twilio)
-    participant DB as Database
+### The "Index Every Column" Fallacy
+Adding indexes on *every* column is terrible advice. 
+1. **Write Penalty:** Every time a new notification is inserted, the database must update every single index. This severely slows down `INSERT` operations.
+2. **Storage Cost:** Indexes consume significant disk space and memory.
+Indexes should be applied strategically based strictly on access patterns.
 
-    User->>App: Performs action (e.g., Payment)
-    App->>API: POST /api/v1/notifications
-    Note right of API: Payload: { userId, type: "sms", message: "..." }
+### Optimized Query for Placements in the Last 7 Days
+```sql
+SELECT id, message, created_at 
+FROM notifications 
+WHERE notification_type = 'Placement' 
+  AND created_at >= NOW() - INTERVAL '7 days';
+```
+*(Note: A composite index on `(notification_type, created_at)` would make this query extremely fast).*
+
+---
+
+## Stage 4: Performance under High Load
+
+If the database is being overwhelmed because notifications are fetched on *every single page load*, we have an architectural bottleneck.
+
+### Proposed Solution: Caching Layer (Redis)
+We should place a **Redis Cache** in front of the database.
+
+**How it works:**
+1. When a student logs in, the backend queries the database for their unread notifications and stores the result in Redis with a Time-To-Live (TTL).
+2. On subsequent page loads, the backend fetches the notifications directly from Redis (which responds in sub-milliseconds), entirely bypassing the database.
+3. When a new notification is generated for the student, the backend invalidates or updates their specific Redis key.
+
+**Trade-offs:**
+- **Pros:** Massive reduction in database load; incredibly fast response times for users.
+- **Cons:** Introduces "Cache Invalidation" complexity. If the cache isn't updated properly when a new notification arrives, the user sees stale data (Data Inconsistency).
+
+---
+
+## Stage 5: Reliability and the "Notify All" Failure
+
+### Shortcomings of the Existing Pseudocode
+The current `notify_all` implementation is a **synchronous loop**. 
+If `send_email` takes 1 second per student, notifying 50,000 students will take almost 14 hours! Furthermore, if the script fails midway (as noted in the logs), there is no state tracking. You cannot easily retry without accidentally double-emailing the first half of the list.
+
+### Redesign: Asynchronous Message Queue
+Saving to the DB and sending emails should **not** happen simultaneously in the main thread. Emails involve external third-party APIs which are slow and prone to network timeouts.
+
+**Architecture:**
+1. The main API inserts the records into the Database.
+2. It then publishes a "SendEmailEvent" to a Message Queue (like RabbitMQ, Kafka, or AWS SQS).
+3. Background Worker processes consume these events asynchronously and send the emails at their own optimized pace. If a worker fails, the Queue simply retries that specific message.
+
+### Revised Pseudocode
+```python
+# MAIN API THREAD (Fast and Reliable)
+function notify_all_async(student_ids: array, message: string):
+    # 1. Bulk insert to DB for high performance
+    bulk_save_to_db(student_ids, message)
     
-    API->>DB: Insert record (Status: "Pending")
-    API->>Queue: Push Job to "sms_queue"
-    API-->>App: 202 Accepted (Job ID)
-    
-    Note over Worker,Queue: Worker constantly polls/listens
-    Queue-->>Worker: Deliver Job
-    
-    Worker->>Provider: Send SMS via API
-    
-    alt Success
-        Provider-->>Worker: 200 OK (Message ID)
-        Worker->>DB: Update record (Status: "Sent")
-    else Failure (e.g., Rate Limited)
-        Provider-->>Worker: 429 Too Many Requests
-        Worker->>Worker: Apply Exponential Backoff
-        Worker->>Queue: Re-queue Job for later
-        Worker->>DB: Update record (Status: "Failed/Retrying")
-    end
+    # 2. Push tasks to Message Queue
+    for student_id in student_ids:
+        message_queue.publish({
+            "task_type": "send_email",
+            "student_id": student_id,
+            "message": message
+        })
+        push_to_app(student_id, message) # SSE trigger
+
+# BACKGROUND WORKER PROCESS (Scalable and Resilient)
+function on_message_received(task):
+    try:
+        send_email(task.student_id, task.message)
+        message_queue.acknowledge(task) # Mark as done
+    except Error:
+        message_queue.retry(task) # Safe retry on failure
 ```
 
-## 🧠 Key Architectural Decisions
+---
 
-*   **Why a Message Queue?** If we attempt to send emails synchronously within the HTTP request cycle, a slow response from SendGrid would cause our API to hang, leading to poor user experience and potential timeouts. The queue acts as a shock absorber.
-*   **Idempotency:** The worker processes are designed to be idempotent. If a worker crashes right after sending an email but before updating the database, the queue might re-deliver the job. The system should check the database to see if a notification with that specific `jobId` was already marked as "Sent" before attempting delivery again.
-*   **Rate Limiting & Retries:** External providers strictly rate-limit API calls. The workers gracefully handle `429 Too Many Requests` responses by placing the job back in the queue with a delay, ensuring we don't drop messages.
+## Stage 6: Priority Inbox Algorithm
+
+To implement the Priority Inbox, we need an algorithm that scores notifications based on a combination of their inherent weight and a time-decay factor (recency), then sorts them to find the top `n`.
+
+**Logic:**
+- `Placement` = Weight 3
+- `Result` = Weight 2
+- `Event` = Weight 1
+- **Time Decay:** We deduct points based on how old the notification is, ensuring fresh events can outrank older, higher-weight notifications.
+
+### Implementation (JavaScript / Node.js)
+
+```javascript
+/**
+ * Priority Inbox Sorting Algorithm
+ * Sorts notifications based on weighted importance and time decay.
+ */
+function getTopPriorityNotifications(notifications, n = 10) {
+    const WEIGHTS = {
+        'Placement': 300,
+        'Result': 200,
+        'Event': 100
+    };
+
+    const now = Date.now();
+    const MS_IN_HOUR = 1000 * 60 * 60;
+
+    // Calculate dynamic scores for each notification
+    const scoredNotifications = notifications.map(notif => {
+        const baseWeight = WEIGHTS[notif.type] || 0;
+        
+        // Calculate age in hours
+        const ageHours = (now - new Date(notif.createdAt).getTime()) / MS_IN_HOUR;
+        
+        // Time decay: Lose 2 points per hour of age
+        const timeDecayPenalty = ageHours * 2;
+        
+        // Final score (minimum score is 0 to avoid negative priorities)
+        const finalScore = Math.max(0, baseWeight - timeDecayPenalty);
+
+        return {
+            ...notif,
+            score: finalScore
+        };
+    });
+
+    // Sort descending by score
+    scoredNotifications.sort((a, b) => b.score - a.score);
+
+    // Return only the top 'n'
+    return scoredNotifications.slice(0, n);
+}
+
+// Example Usage:
+// const priorityInbox = getTopPriorityNotifications(unreadNotifs, 10);
+```
