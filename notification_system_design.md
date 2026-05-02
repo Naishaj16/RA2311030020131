@@ -172,59 +172,31 @@ function on_message_received(task):
 
 ---
 
-## Stage 6: Priority Inbox Algorithm
+## Stage 6: Priority Inbox Algorithm & Efficient Maintenance
 
-To implement the Priority Inbox, we need an algorithm that scores notifications based on a combination of their inherent weight and a time-decay factor (recency), then sorts them to find the top `n`.
+To implement the Priority Inbox, we need an algorithm that scores notifications based on a combination of their inherent weight and a time-decay factor (recency).
 
 **Logic:**
-- `Placement` = Weight 3
-- `Result` = Weight 2
-- `Event` = Weight 1
-- **Time Decay:** We deduct points based on how old the notification is, ensuring fresh events can outrank older, higher-weight notifications.
+- `Placement` = Base Weight 300
+- `Result` = Base Weight 200
+- `Event` = Base Weight 100
+- **Time Decay:** We deduct 2 priority points for every hour of age, ensuring fresh events can outrank older, higher-weight notifications over time.
 
-### Implementation (JavaScript / Node.js)
+### How to Maintain the Top 10 Efficiently
+The challenge notes that new notifications will *keep coming in*. Recalculating scores and re-sorting the entire array of millions of notifications every time (`O(N log N)`) is highly inefficient and unscalable.
 
-```javascript
-/**
- * Priority Inbox Sorting Algorithm
- * Sorts notifications based on weighted importance and time decay.
- */
-function getTopPriorityNotifications(notifications, n = 10) {
-    const WEIGHTS = {
-        'Placement': 300,
-        'Result': 200,
-        'Event': 100
-    };
+**The Solution: A Min-Heap (Priority Queue)**
+To maintain *exactly* the top 10 notifications efficiently, we use a **Min-Heap of fixed size 10**.
+1. We initialize a Min-Heap based on the calculated priority score.
+2. For the initial batch, we insert the first 10 notifications.
+3. For every subsequent new notification, we calculate its score and compare it to the **root** of the Min-Heap (which represents the *lowest* score currently in the Top 10).
+4. If the new notification's score is higher than the root, we pop the root and insert the new notification. 
+5. If it's lower, we ignore it.
 
-    const now = Date.now();
-    const MS_IN_HOUR = 1000 * 60 * 60;
+**Time Complexity:** 
+Maintaining a heap of size `K=10` takes `O(log K)` time for insertion. Since `log(10)` is effectively a constant, inserting a new notification into the priority inbox happens in **`O(1)` constant time**. This guarantees massive scalability.
 
-    // Calculate dynamic scores for each notification
-    const scoredNotifications = notifications.map(notif => {
-        const baseWeight = WEIGHTS[notif.type] || 0;
-        
-        // Calculate age in hours
-        const ageHours = (now - new Date(notif.createdAt).getTime()) / MS_IN_HOUR;
-        
-        // Time decay: Lose 2 points per hour of age
-        const timeDecayPenalty = ageHours * 2;
-        
-        // Final score (minimum score is 0 to avoid negative priorities)
-        const finalScore = Math.max(0, baseWeight - timeDecayPenalty);
+### Implementation
+The functional code implementation for fetching the data via the API and calculating the scores has been written in **`priority_inbox.js`** located in the root of this repository.
 
-        return {
-            ...notif,
-            score: finalScore
-        };
-    });
-
-    // Sort descending by score
-    scoredNotifications.sort((a, b) => b.score - a.score);
-
-    // Return only the top 'n'
-    return scoredNotifications.slice(0, n);
-}
-
-// Example Usage:
-// const priorityInbox = getTopPriorityNotifications(unreadNotifs, 10);
-```
+*Note: Screenshots of the output displaying the calculated priority notifications have been uploaded to this repository as requested.*
