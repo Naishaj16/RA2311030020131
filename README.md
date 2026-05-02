@@ -43,9 +43,9 @@ An advanced microservice that acts as an optimization proxy.
 - It fetches live depot and vehicle data from an external Test Server.
 - It utilizes a custom Dynamic Programming algorithm to solve the 0/1 Knapsack Problem, maximizing the operational impact score of vehicle tasks within a strict mechanic-hour budget constraint.
 
-### 3. Notification System Design & App
-- **System Design:** The repository contains a comprehensive system design document detailing a decoupled, scalable notification service architecture.
-- **Implementation:** The associated backend application manages the queuing and dispatching logic for the notification service.
+### 3. Notification System Design & Priority Inbox
+- **System Design (`notification_system_design.md`):** A comprehensive 6-stage system design document detailing API contracts, PostgreSQL schema, query optimization, caching strategies, and asynchronous message queue architectures for a scalable campus notification platform.
+- **Priority Inbox Implementation (`priority_inbox.js`):** A functioning Node.js algorithm that connects to a protected evaluation API, fetches live notifications, and applies a weighted Time-Decay scoring logic (optimized via a Min-Heap strategy) to calculate the Top 10 Priority Inbox.
 
 ## Data Flow Diagram: Scheduling Optimization
 
