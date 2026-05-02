@@ -1,0 +1,2 @@
+[2026-05-02T05:50:29.009Z] GET / - Status: 200 - Time: 12.854ms
+[2026-05-02T05:50:29.230Z] GET /slow-route - Status: 200 - Time: 505.390ms
