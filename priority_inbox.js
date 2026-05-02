@@ -1,4 +1,4 @@
-const API_URL = 'http://20.207.122.201/evaluation-service/notifications';
+const API_URL = `${process.env.AFFORDMED_API_BASE || 'http://20.207.122.201/evaluation-service'}/notifications`;
 
 const WEIGHTS = {
     'Placement': 300,

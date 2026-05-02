@@ -1,6 +1,6 @@
 const { solveKnapsack } = require('../services/algorithm');
 
-const AFFORDMED_API_BASE = 'http://20.207.122.201/evaluation-service';
+const AFFORDMED_API_BASE = process.env.AFFORDMED_API_BASE || 'http://20.207.122.201/evaluation-service';
 
 
 const getOptimizedSchedules = async (req, res) => {

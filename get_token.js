@@ -2,18 +2,20 @@
 
 
 const MY_DETAILS = {
-    email: "nj7423@srmist.edu.in",
-    name: "naisha jain",
-    rollNo: "ra2311030020131",
-    accessCode: "QkbpxH",
-    clientID: "be455001-cc06-4e78-b46d-a4a4fc1e7b71",
-    clientSecret: "ypFPUTncvrHDUspw"
+    email: process.env.EMAIL,
+    name: process.env.NAME,
+    rollNo: process.env.ROLL_NO,
+    accessCode: process.env.ACCESS_CODE,
+    clientID: process.env.CLIENT_ID,
+    clientSecret: process.env.CLIENT_SECRET
 };
+
+const API_BASE = process.env.AFFORDMED_API_BASE || "http://20.207.122.201/evaluation-service";
 
 async function getCredentials() {
     console.log("Getting Authorization Token directly...");
     try {
-        const authResponse = await fetch("http://20.207.122.201/evaluation-service/auth", {
+        const authResponse = await fetch(`${API_BASE}/auth`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(MY_DETAILS)
