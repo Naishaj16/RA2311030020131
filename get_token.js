@@ -11,7 +11,7 @@ const MY_DETAILS = {
 };
 
 async function getCredentials() {
-    console.log("⏳ Getting Authorization Token directly...");
+    console.log("Getting Authorization Token directly...");
     try {
         const authResponse = await fetch("http://20.207.122.201/evaluation-service/auth", {
             method: "POST",
@@ -22,17 +22,17 @@ async function getCredentials() {
         const authData = await authResponse.json();
 
         if (!authResponse.ok) {
-            console.error("❌ Authentication Failed!", authData);
+            console.error("Authentication Failed!", authData);
             return;
         }
 
-        console.log("✅ Authentication Successful!");
-        console.log("\n🎉 YOUR ACCESS TOKEN (Save this!):\n");
+        console.log("Authentication Successful!");
+        console.log("\nYOUR ACCESS TOKEN (Save this!):\n");
         console.log(authData.access_token);
         console.log("\n==============================================================");
 
     } catch (error) {
-        console.error("❌ Network Error:", error.message);
+        console.error("Network Error:", error.message);
     }
 }
 

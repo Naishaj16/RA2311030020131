@@ -47,7 +47,7 @@ async function fetchAndSortNotifications(token) {
         scoredNotifs.sort((a, b) => b.Score - a.Score);
         const top10 = scoredNotifs.slice(0, 10);
 
-        console.log("🏆 TOP 10 PRIORITY INBOX 🏆");
+        console.log("TOP 10 PRIORITY INBOX");
         console.log("==================================================");
         top10.forEach((notif, index) => {
             console.log(`#${index + 1} | Type: ${notif.Type.padEnd(10)} | Score: ${notif.Score.toFixed(2)}`);
@@ -56,7 +56,7 @@ async function fetchAndSortNotifications(token) {
             console.log("--------------------------------------------------");
         });
 
-        console.log("\n✅ Take a screenshot of this output for your GitHub submission!");
+        console.log("\nTake a screenshot of this output for your GitHub submission!");
 
     } catch (error) {
         console.error("Failed to fetch priority notifications:", error.message);
@@ -66,7 +66,7 @@ async function fetchAndSortNotifications(token) {
 
 const token = process.argv[2];
 if (!token) {
-    console.log("❌ Missing Token!");
+    console.log("Error: Missing Token!");
     console.log("Usage: node priority_inbox.js YOUR_ACCESS_TOKEN");
     process.exit(1);
 }
