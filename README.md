@@ -1,33 +1,82 @@
-# Backend Engineering Challenge 🚀
+# Backend Engineering Assessment
 
-Welcome to my Backend Track submission! This repository contains my solutions for the three core backend engineering problems. I've designed these systems with a focus on clean architecture, readable code, and scalable design principles.
+This repository contains my solutions for the core backend engineering challenges. The systems are designed with a focus on clean architecture, readable code, and scalable design principles. All solutions adhere to the strict constraint of implementing custom logic and algorithms from scratch without relying on external algorithmic libraries.
 
-## 📌 Project Overview
+## Project Architecture
 
-This repository is split into three independent backend projects. Each focuses on a specific challenge, built using **Node.js** and **Express**, adhering to the rule of implementing custom algorithms without relying on heavy external libraries.
+The repository is modularized into independent backend services. The following diagram illustrates the high-level architecture and responsibilities of the implemented modules:
 
-1.  **[Logging Validation Middleware](./logging_middleware/)**
-    *   A custom Express API endpoint that intercepts incoming application logs, strictly validates the payload against a specific set of constraints (Stack, Level, Package), and generates a zero-dependency UUID. 
-2.  **[Vehicle Scheduling Microservice](./vehicle_scheduling/)**
-    *   An advanced microservice that fetches live data from an external Test Server and uses a Dynamic Programming algorithm to solve the 0/1 Knapsack Problem, maximizing the operational impact score of vehicle tasks within a strict mechanic-hour budget.
-3.  **[Notification System Design & App](./notification_app_be/)**
-    *   *System Design:* Check out [`notification_system_design.md`](./notification_system_design.md) for the complete architecture and data flow diagrams of a scalable, decoupled notification service.
-    *   *Implementation:* The `notification_app_be` folder contains the backend implementation of the API that handles queuing and dispatching these notifications.
+```mermaid
+graph TD
+    Client[Client Request]
+    
+    subgraph Logging Module
+        LV[Logging Validation API]
+        Validator[Strict Constraint Validator]
+        UUID[Custom UUID Generator]
+        LV -->|Payload| Validator
+        Validator -->|Valid| UUID
+    end
 
-## 🛠️ Tech Stack & Architecture
+    subgraph Scheduling Module
+        VS[Vehicle Scheduling Proxy]
+        DP[Dynamic Programming Algorithm]
+        Ext[Affordmed Test Server APIs]
+        VS -->|Fetch| Ext
+        Ext -->|Depot/Vehicle Data| VS
+        VS -->|Optimize| DP
+    end
+
+    Client -.-> LV
+    Client -.-> VS
+```
+
+## Implemented Modules
+
+### 1. Logging Validation Middleware
+A custom Express API endpoint designed to intercept incoming application logs. 
+- It strictly validates the payload against a predefined set of constraints, ensuring that packages align correctly with their respective stacks.
+- It includes a custom-built, zero-dependency UUID generation algorithm to handle unique log identification.
+
+### 2. Vehicle Scheduling Microservice
+An advanced microservice that acts as an optimization proxy.
+- It fetches live depot and vehicle data from an external Test Server.
+- It utilizes a custom Dynamic Programming algorithm to solve the 0/1 Knapsack Problem, maximizing the operational impact score of vehicle tasks within a strict mechanic-hour budget constraint.
+
+### 3. Notification System Design & App
+- **System Design:** The repository contains a comprehensive system design document detailing a decoupled, scalable notification service architecture.
+- **Implementation:** The associated backend application manages the queuing and dispatching logic for the notification service.
+
+## Data Flow Diagram: Scheduling Optimization
+
+The following flowchart outlines the specific execution path for the dynamic programming optimization module:
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Proxy as Scheduling API
+    participant Ext as Test Server
+    participant Algo as DP Algorithm
+
+    Client->>Proxy: Request Schedule (Bearer Token)
+    Proxy->>Ext: Fetch /depots & /vehicles
+    Ext-->>Proxy: Live API Data
+    loop For each Depot
+        Proxy->>Algo: Pass Capacity & Tasks
+        Algo-->>Proxy: Return Max Impact & Selection
+    end
+    Proxy-->>Client: Optimized Schedule JSON
+```
+
+## Technology Stack
 
 - **Runtime:** Node.js
 - **Framework:** Express.js
-- **Design Pattern:** Modular, separation of concerns (Routes, Controllers, Services).
+- **Design Pattern:** Modular MVC architecture for separation of concerns.
 - **Algorithms:** Pure JavaScript implementations (Dynamic Programming, custom UUID generation) to adhere to the zero-dependency rule.
-- **Documentation:** Markdown with Mermaid.js for diagrams.
 
-*Note: As per the challenge guidelines, I've avoided using external utility libraries (like lodash, moment.js, or uuid) for core algorithms, ensuring the logic is built from scratch and easy to evaluate.*
+Note: As per the challenge guidelines, external utility libraries such as lodash, moment.js, or uuid were strictly avoided for core algorithms to demonstrate raw coding competency.
 
-## 📸 Testing & Verification
+## Testing & Verification
 
-I've rigorously tested the APIs using Postman/Insomnia. You will find screenshots capturing the **request body**, **response payload**, and **response times** within each specific project's documentation to verify performance and correctness.
-
----
-
-*Thank you for reviewing my submission. Feel free to reach out if you have any questions about my architectural choices or code structure!*
+The APIs were rigorously tested to ensure performance and correctness. Screenshots capturing the request bodies, response payloads, and execution times are provided as part of the submission to verify the successful integration and output formatting required by the problem statements.
